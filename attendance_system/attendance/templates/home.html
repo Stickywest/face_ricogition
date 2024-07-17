@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="jumbotron text-center">
+        <h1 class="display-4">Welcome to the Attendance System</h1>
+        <p class="lead">Please scan your face to record attendance.</p>
+        <hr class="my-4">
+        <button id="scan-button" class="btn btn-primary btn-lg">Scan Face</button>
+    </div>
+
+    <div class="text-center mt-3">
+        <video id="video" class="border rounded" width="640" height="480" autoplay></video>
+        <canvas id="canvas" style="display:none;"></canvas>
+        <div id="message" class="alert alert-danger mt-3" style="display: none;"></div>
+    </div>
+</div>
+
+<script>
+document.getElementById('scan-button').addEventListener('click', () => {
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const context = canvas.getContext('2d');
+    const messageDiv = document.getElementById('message');
+
+    // Clear previous messages
+    messageDiv.textContent = '';
+    messageDiv.style.display = 'none';
+
+    // Request access to the camera
+    navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+            video.srcObject = stream;
+
+            video.addEventListener('play', () => {
+                setTimeout(() => {
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    video.pause();
+                    video.srcObject.getTracks().forEach(track => track.stop());
+
+                    canvas.toBlob(blob => {
+                        const formData = new FormData();
+                        formData.append('image', blob, 'scan.jpg');
+
+                        fetch("{% url 'scan-face' %}", {
+                            method: 'POST',
+                            body: formData,
+                            headers: {
+                                'X-CSRFToken': '{{ csrf_token }}'
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                alert(`Hello ${data.name}, you have signed ${data.action}`);
+                            } else {
+                                alert(data.status === 'no_face_detected' ? 'No face detected. Please try again.' : 'Unknown face. Please contact admin.');
+                            }
+                        });
+                    });
+                }, 1000);
+            });
+        })
+        .catch(error => {
+            messageDiv.textContent = 'Error accessing camera: ' + error.message;
+            messageDiv.style.display = 'block';
+        });
+});
+</script>
+{% endblock %}
